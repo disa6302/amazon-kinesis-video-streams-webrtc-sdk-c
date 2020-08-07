@@ -109,7 +109,9 @@ CleanUp:
     }
 
     printf("[KVS Master] Cleaning up....\n");
-
+    if (logStartUpLatency(pSampleConfiguration) != STATUS_SUCCESS) {
+        printf("[KVS Master] Failed to log start up latency data\n");
+    }
     if (pSampleConfiguration != NULL) {
         // Kick of the termination sequence
         ATOMIC_STORE_BOOL(&pSampleConfiguration->appTerminateFlag, TRUE);
@@ -238,6 +240,10 @@ PVOID sendVideoPackets(PVOID args)
         MUTEX_LOCK(pSampleConfiguration->sampleConfigurationObjLock);
         for (i = 0; i < pSampleConfiguration->streamingSessionCount; ++i) {
             status = writeFrame(pSampleConfiguration->sampleStreamingSessionList[i]->pVideoRtcRtpTransceiver, &frame);
+            pSampleConfiguration->sampleStreamingSessionList[i]->videoStartUpLatency =
+                (pSampleConfiguration->sampleStreamingSessionList[i]->pVideoRtcRtpTransceiver->firstFrameRtpPacketTimestamp -
+                 pSampleConfiguration->sampleStreamingSessionList[i]->firstSdpMsgReceiveTime) /
+                HUNDREDS_OF_NANOS_IN_A_MILLISECOND;
             encoderStats.encodeTimeMsec = 4; // update encode time to an arbitrary number to demonstrate stats update
             updateEncoderStats(pSampleConfiguration->sampleStreamingSessionList[i]->pVideoRtcRtpTransceiver, &encoderStats);
             if (status != STATUS_SUCCESS) {
@@ -309,10 +315,13 @@ PVOID sendAudioPackets(PVOID args)
         }
 
         frame.presentationTs += SAMPLE_AUDIO_FRAME_DURATION;
-
         MUTEX_LOCK(pSampleConfiguration->sampleConfigurationObjLock);
         for (i = 0; i < pSampleConfiguration->streamingSessionCount; ++i) {
             status = writeFrame(pSampleConfiguration->sampleStreamingSessionList[i]->pAudioRtcRtpTransceiver, &frame);
+            pSampleConfiguration->sampleStreamingSessionList[i]->audioStartUpLatency =
+                (pSampleConfiguration->sampleStreamingSessionList[i]->pAudioRtcRtpTransceiver->firstFrameRtpPacketTimestamp -
+                 pSampleConfiguration->sampleStreamingSessionList[i]->firstSdpMsgReceiveTime) /
+                HUNDREDS_OF_NANOS_IN_A_MILLISECOND;
             if (status != STATUS_SUCCESS) {
                 printf("writeFrame failed with 0x%08x", status);
             }
